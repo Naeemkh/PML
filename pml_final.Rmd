@@ -1,0 +1,116 @@
+## Practical Machine Learning - Final Project
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+### Loading Data
+In this project I mainly I will use the caret Package. I load the package then load the data. 
+
+```{r}
+library(caret)
+
+train_data <- read.csv('pml-training.csv',na.strings=c("NA",""), header=T)
+test_data <- read.csv('pml-testing.csv',na.strings=c("NA",""), header=T)
+dim(train_data)
+dim(test_data)
+```
+
+Data has many NA values. Also in any dataset there could be a parameter which is not changing considerably and has not effect in the classification process. I remove the mostly NA and also near zero variance columns.
+
+```{r}
+# Remove columns with more than 95 percent of NA value
+
+na_train_data <- sapply(train_data, function(x) mean(is.na(x))) > 0.95
+na_test_data <- sapply(test_data, function(x) mean(is.na(x))) > 0.95
+
+train_data_wo_na <- train_data[, na_train_data==F]
+test_data_wo_na <- test_data[, na_test_data==F]
+
+
+# remove variables with Nearly Zero Variance
+nzv <- nearZeroVar(train_data_wo_na)
+train_data_prep <- train_data_wo_na[, -nzv]
+test_data_prep  <- test_data_wo_na[, -nzv]
+
+head(train_data_prep)
+```
+
+At the next step, I take a look at the fields to see which of them will be helpful in classification process.
+
+```{r}
+names(train_data_prep)
+```
+
+Based on the results, I remove the first 5 columns which are number, username and time stamps. 
+
+```{r}
+train_data_prep1 <- train_data_prep[, -c(1:5)]
+test_data_prep1 <- test_data_prep[, -c(1:5)]
+```
+
+At the next step I need to split the training data into train and validation data. Since we have large amount of training data, I choose 70% for training and 30% for validation.
+
+```{r}
+Td <- createDataPartition(train_data_prep1$classe, p = 0.7, list = FALSE)
+train_final <- train_data_prep1[Td, ]
+valid_final <- train_data_prep1[-Td, ]
+
+```
+
+We loaded, cleaned, and preprocess the data.
+
+### Prediction
+In this section I will use the training, validation, and test data to develop a prediction algorithm. I use two common methods, which are classification tree and random forest. For the classification tree I use 10-fold cross validation.
+
+#### Classificaiton Tree Approach
+
+```{r}
+set.seed(7000)
+train_control <- trainControl(method = "cv", number = 10)
+trained_ct <- train(classe ~ ., data = train_final, method = "rpart", 
+                   trControl = train_control)
+print(trained_ct, digits = 4)
+library(rattle)
+fancyRpartPlot(trained_ct$finalModel)
+
+predict_valid_data_tr <- predict(trained_ct, valid_final) 
+(confusion_mat_tr <- confusionMatrix(valid_final$classe, predict_valid_data_tr))
+(accuracy <- confusion_mat_tr$overall[1])
+```
+
+
+#### Random Forest Approach
+
+After the classification tree approach we try the random forest approach.
+
+```{r, cache=TRUE}
+set.seed(7000)
+trained_rf <- train(classe ~ ., data = train_final, method = "rf", 
+                   trControl = train_control, allowParallel=TRUE, ntree=10)
+print(trained_rf , digits = 4)
+predict_valid_data_rf <- predict(trained_rf, valid_final) 
+(confusion_mat_rf <- confusionMatrix(valid_final$classe, predict_valid_data_rf))
+(accuracy <- confusion_mat_rf$overall[1])
+
+```
+
+We used to method. Based on the accuracy of the random forest method is much better than the classification tree approach.
+Now we predict the values for the test data.
+
+```{r}
+test_predict <- predict(trained_rf, test_data_prep1)
+test_predict
+```
+
+### Conclusion
+
+I used personal activity data  of six individuals to predict the "classe" variable. I loaded the data and remove the observation data with many missing values. I also removed the observations, which have not any effect on the classification process. I split the train data into the training and validation groups and trained the algorithm. The results show, the random forest approach gives a considerably acceptable prediction than the classification tree.  In the end, I applied the trained network on the test data. 
+
+### Data and Resources 
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+
+
